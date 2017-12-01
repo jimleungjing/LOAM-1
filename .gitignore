@@ -31,8 +31,5 @@
 *.out
 *.app
 
-#build dir
-build
-
 #data dir
 *data*
