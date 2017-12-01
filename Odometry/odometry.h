@@ -19,7 +19,7 @@
 #include <iostream>
 #include <fstream>
 
-#define MINIBEG 32
+#define MINIBEG 20
 
 typedef pcl::PointXYZRGB PointT; 
 using namespace std; 
@@ -40,7 +40,7 @@ inline int elimiUnormalNearPoint(vector<int>& S,vector<float>& distance,\
         pcl::PointCloud<PointT>::Ptr cloud);
 
 inline int isEdgeorPlanePoint(vector<double>&cVal,vector<int>&edge_index,\
-        vector<int>&plane_index,const double threadhold[4]);
+        vector<int>&plane_index,const double threadhold[4],pcl::PointCloud<PointT>::Ptr cloud);
 
 inline int selectEdgePoint(vector<double>&cVal,vector<int>&edge_index,\
         pcl::PointCloud<PointT>::Ptr clout,pcl::KdTreeFLANN<PointT>& tree);
@@ -67,16 +67,47 @@ inline int selectPlanePoint(vector<double>&cVal,vector<int>&plane_index,\
 }
 
 inline int isEdgeorPlanePoint(vector<double>&cVal,vector<int>&edge_index,\
-        vector<int>&plane_index,const double threadhold[4])
+        vector<int>&plane_index,const double threadhold[4],pcl::PointCloud<PointT>::Ptr cloud)
 {
-
+    int edge_beg=-1;
+    int plane_beg=-1;
+    int edge_prev=0;
+    int plane_prev=0;
+    int edge_max=-1;
+    int plane_max=-1;
     for(int i=0;i<cVal.size();++i)
     {
         if(cVal[i]>threadhold[2]&&cVal[i]<threadhold[3])
+        {
+#if 1
+            if(edge_beg==-1)        //第一次发现角点
+            {
+                edge_beg=i;
+                edge_prev=i;
+                edge_max=i;
+            }
+            if(i-edge_prev<=2)      //认为仍然是连在一起的
+            {
+                if(cVal[i]>cVal[edge_max])
+                    edge_max=i;
+                edge_prev=i;
+            }
+#else
             edge_index.push_back(i);
+#endif
+        }
         else if(cVal[i]>threadhold[0]&&cVal[i]<threadhold[1])
+        {
+            if(i-edge_prev>2)       //出现角点中断
+            {
+                edge_index.push_back(edge_max);
+                edge_beg=-1; 
+            }
             plane_index.push_back(i);
+        }
     }
+    std::cout<<"plane_index size: "<<plane_index.size()<<endl;
+    std::cout<<"edge_index size: "<<edge_index.size()<<endl;
     return 0;
 
 }
@@ -121,7 +152,7 @@ inline double calculate_cVal(vector<int>& S,const pcl::PointXYZRGB & centerPoint
 {
     double cVal;
     int Ssize=S.size();
-    if(Ssize<=16)
+    if(Ssize<=10)
     {
         return -1;
     }

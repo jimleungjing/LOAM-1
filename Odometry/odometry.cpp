@@ -10,7 +10,7 @@
 #include <iostream>
 #include <fstream>
 
-const double TH[4]={0,0.0001,0.03,0.08};
+const double TH[4]={0,0.005,0.012,0.05};
 
 #if 0
 int extractfeatruepoints(pcl::PointCloud<PointT>::Ptr cloud,std::vector<int>&edge_index,std::vector<int>&plane_index)
@@ -51,7 +51,7 @@ int extractfeatruepoints(pcl::PointCloud<PointT>::Ptr cloud,std::vector<int>&edg
         else
             cVal.push_back(-1);
     }
-    isEdgeorPlanePoint(cVal,edge_index,plane_index,TH);
+    isEdgeorPlanePoint(cVal,edge_index,plane_index,TH,cloud);
     for(int i=0;i<edge_index.size();++i)
         setPoint2Red(cloud->points[edge_index[i]]);
     for(int i=0;i<plane_index.size();++i)

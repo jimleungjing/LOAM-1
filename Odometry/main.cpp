@@ -15,7 +15,7 @@ int main ()
     pcl::PointCloud<PointT>::Ptr cloud (new pcl::PointCloud<PointT>);
 
     std::string dir = "../../data/Pk_select/"; 
-    std::string filename = "100_1.XYZ"; 
+    std::string filename = "100_-15.XYZ"; 
 #if 0
     if (pcl::io::loadPCDFile<PointT> ((dir+filename), *cloud) == -1)
     { 
