@@ -1,3 +1,0 @@
-/home/yusnows/Documents/CourseMatrial/FrontierExperience_II/Lab_LOAM/Odometry/build/CMakeFiles/edit_cache.dir
-/home/yusnows/Documents/CourseMatrial/FrontierExperience_II/Lab_LOAM/Odometry/build/CMakeFiles/rebuild_cache.dir
-/home/yusnows/Documents/CourseMatrial/FrontierExperience_II/Lab_LOAM/Odometry/build/CMakeFiles/odometry.dir
