@@ -15,7 +15,7 @@ int main ()
     pcl::PointCloud<PointT>::Ptr cloud (new pcl::PointCloud<PointT>);
 
     std::string dir = "../../data/Pk_select/"; 
-    std::string filename = "100_-15.XYZ"; 
+    std::string filename = "100_1.XYZ"; 
 #if 0
     if (pcl::io::loadPCDFile<PointT> ((dir+filename), *cloud) == -1)
     { 
@@ -39,9 +39,20 @@ int main ()
         cloud->points[i].b=255;
         cloud->points[i].a=128;
     }
-
+    std::vector<double> dis;
+    for(int i=1;i<cloud->width*cloud->height;++i)
+    {
+        dis.push_back(calPoint2PointDis(cloud->points[i-1],cloud->points[i]));
+    }
+#if 1
+    std::sort(dis.begin(),dis.end());
+    for(int i=0;i<dis.size();++i)
+        cout<<dis[i]<<endl;
+    cout<<endl<<endl;
+#endif
     std::vector<int>edge_index;
     std::vector<int>plane_index;
+    std::cout<<calPoint2PointDis(cloud->points[100],cloud->points[104])<<endl;
     extractfeatruepoints(cloud,edge_index,plane_index);
 
 #if 0

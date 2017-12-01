@@ -53,14 +53,21 @@ int extractfeatruepoints(pcl::PointCloud<PointT>::Ptr cloud,std::vector<int>&edg
     }
     isEdgeorPlanePoint(cVal,edge_index,plane_index,TH,cloud);
     for(int i=0;i<edge_index.size();++i)
+    {
+        std::cout<<edge_index[i]<<endl;
         setPoint2Red(cloud->points[edge_index[i]]);
+    }
     for(int i=0;i<plane_index.size();++i)
+    {
         setPoint2Green(cloud->points[plane_index[i]]);
+    }
+#if 0
     std::sort(cVal.begin(),cVal.end());
     for(int i=0;i<cVal.size();++i)
     {
         std::cout<<cVal[i]<<endl;
     }
+#endif
     return 0;
 }
 

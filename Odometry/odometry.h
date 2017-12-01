@@ -98,7 +98,7 @@ inline int isEdgeorPlanePoint(vector<double>&cVal,vector<int>&edge_index,\
         }
         else if(cVal[i]>threadhold[0]&&cVal[i]<threadhold[1])
         {
-            if(i-edge_prev>2)       //出现角点中断
+            if(i-edge_prev>2&&edge_beg!=-1)       //出现角点中断
             {
                 edge_index.push_back(edge_max);
                 edge_beg=-1; 
@@ -106,6 +106,28 @@ inline int isEdgeorPlanePoint(vector<double>&cVal,vector<int>&edge_index,\
             plane_index.push_back(i);
         }
     }
+#if 1
+    int edge_cnt=0;
+    for(int i=edge_index.size()-1;i>=0;--i)
+    {
+        int tmp_index=edge_index[i];
+        for(int j=tmp_index-4;j<tmp_index+4;++j)
+        {
+            double tmp_dis=calPoint2PointDis(cloud->points[tmp_index],cloud->points[j]);
+//            std::cout<<tmp_dis<<endl;
+            if(tmp_dis>0.05)
+            {
+                ++edge_cnt; 
+            }
+        }
+        if(edge_cnt>4)
+        {
+            edge_index.pop_back();
+        }
+        edge_cnt=0;
+
+    }
+#endif
     std::cout<<"plane_index size: "<<plane_index.size()<<endl;
     std::cout<<"edge_index size: "<<edge_index.size()<<endl;
     return 0;
@@ -120,7 +142,9 @@ inline int select_S(vector<int>&Sindex,int beg,int num,pcl::PointCloud<PointT>::
         return -1;
     for(int i=beg-num/2;i<beg+num/2;++i)
     {
-        if(calPoint2PointDis(cloud->points[beg],cloud->points[i])>0.01)
+        double tmp_dis=calPoint2PointDis(cloud->points[beg],cloud->points[i]);
+//        cout<<tmp_dis<<endl;
+        if(tmp_dis>1)
             continue;
         Sindex.push_back(i);
     }
@@ -140,9 +164,9 @@ inline int select_S(vector<int>&Sindex,int beg,int num,pcl::PointCloud<PointT>::
 inline double calPoint2PointDis(PointT& p1,PointT& p2)
 {
     double dis;
-    int dx=p1.x-p2.x;
-    int dy=p1.y-p2.y;
-    int dz=p1.z-p2.z;
+    double dx=p1.x-p2.x;
+    double dy=p1.y-p2.y;
+    double dz=p1.z-p2.z;
     dis=sqrt(dx*dx+dy*dy+dz*dz);
     return dis;
 }
