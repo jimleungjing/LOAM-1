@@ -32,7 +32,7 @@
 *.app
 
 #build dir
-build/*
+build
 
 #data dir
 *data*
