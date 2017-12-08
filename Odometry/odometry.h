@@ -106,21 +106,21 @@ inline int isEdgeorPlanePoint(vector<double>&cVal,vector<int>&edge_index,\
             plane_index.push_back(i);
         }
     }
-#if 1
+#if 0
     int edge_cnt=0;
     for(int i=edge_index.size()-1;i>=0;--i)
     {
         int tmp_index=edge_index[i];
-        for(int j=tmp_index-4;j<tmp_index+4;++j)
+        for(int j=tmp_index-8;j<tmp_index+8;++j)
         {
             double tmp_dis=calPoint2PointDis(cloud->points[tmp_index],cloud->points[j]);
 //            std::cout<<tmp_dis<<endl;
-            if(tmp_dis>0.05)
+            if(tmp_dis>0.1)
             {
                 ++edge_cnt; 
             }
         }
-        if(edge_cnt>4)
+        if(edge_cnt>5)
         {
             edge_index.pop_back();
         }
@@ -144,7 +144,7 @@ inline int select_S(vector<int>&Sindex,int beg,int num,pcl::PointCloud<PointT>::
     {
         double tmp_dis=calPoint2PointDis(cloud->points[beg],cloud->points[i]);
 //        cout<<tmp_dis<<endl;
-        if(tmp_dis>1)
+        if(tmp_dis>0.5)
             continue;
         Sindex.push_back(i);
     }

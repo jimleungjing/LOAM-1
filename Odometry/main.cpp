@@ -44,7 +44,7 @@ int main ()
     {
         dis.push_back(calPoint2PointDis(cloud->points[i-1],cloud->points[i]));
     }
-#if 1
+#if 0
     std::sort(dis.begin(),dis.end());
     for(int i=0;i<dis.size();++i)
         cout<<dis[i]<<endl;
