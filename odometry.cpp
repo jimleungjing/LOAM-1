@@ -13,16 +13,8 @@ int main()
     std::string dir = "../../data/Pk_select/";
     std::string filesuffix[16] = {"_1.XYZ","_3.XYZ","_5.XYZ","_7.XYZ","_9.XYZ","_11.XYZ","_13.XYZ","_15.XYZ", \
                                 "_-1.XYZ","_-3.XYZ","_-5.XYZ","_-7.XYZ","_-9.XYZ","_-11.XYZ","_-13.XYZ","_-15.XYZ"};
-    std::string afilename = "1_1.XYZ";
-    std::string filename1=dir+afilename;
-    if(read2PointCloud(filename1,cloud)==-1)
-    {
-        printf("can not open file %s!\n",(dir+afilename).c_str());
-           return -1;
-    }
-
  
-    // read Pk
+    // read last point cloud : Pk
     int pScan = 0,pPk = 1;std::string filename;
     char ctmp[8];
     scanCloud.reserve(16);
@@ -38,8 +30,7 @@ int main()
             return -1;
         }
         scanCloud.push_back(scanCloud0);
-        std::cout<<"Scan["<<pScan<<"]"<<" size:\n"<<scanCloud[pScan]->width << std::endl;
-        *sweepCloud1 += *(scanCloud[pScan]);
+        //std::cout<<"Scan["<<pScan<<"]"<<" size:\n"<<scanCloud[pScan]->width << std::endl;
     }
 
     std::vector<vector<int> > EdgePointIndices(16);
@@ -60,36 +51,19 @@ int main()
             return -1;
         }
         currScans.push_back(scanCloud0);
-        //std::cout<<"Scan["<<pScan<<"]"<<" size:\n"<<currscanCloud[pScan]->width << std::endl;
         extractFeatruePoints(scanCloud0,EdgePointIndices[line],PlanarPointIndices[line]);
+        *sweepCloud1 += *(currScans[line]);
     }
 
-  // only used in a + b mode, wrong mode: a + b + c
-  //*sweepCloud1 = *scanCloud0;
-  //*sweepCloud1 = *sweepCloud1 + *scanCloud1;
-  //sweepCloud1+= scanCloud2;
-
-    printf("Loaded %d data points from PCD\n",
-            cloud->width * cloud->height);
-
-    // std::vector<int> EdgePointIndex;
-    // std::vector<int> PlanarPointIndex;
-    // extractFeatruePoints(cloud,EdgePointIndex,PlanarPointIndex);
     FindCorrespondence(0,scanCloud,currScans,NULL,EdgePointIndices,PlanarPointIndices);
 
-    pcl::visualization::PCLVisualizer viewer;
     pcl::visualization::PCLVisualizer PkViewer;
-    viewer.setCameraPosition(0,0,-3.0,0,-1,0);
-    viewer.addCoordinateSystem(0.3);
-    viewer.addPointCloud(cloud);
-
     PkViewer.setCameraPosition(0,0,-3.0,0,-1,0);
     PkViewer.addCoordinateSystem(0.3);
     PkViewer.addPointCloud(sweepCloud1);
 
-    while(!viewer.wasStopped() || (!PkViewer.wasStopped()))
+    while((!PkViewer.wasStopped()))
     {
-        viewer.spinOnce(100);
         PkViewer.spinOnce(100);
     }
     return (0);
@@ -185,11 +159,11 @@ int read2PointCloud(std::string& file2read,pcl::PointCloud<PointT>::Ptr cloud)
           {
             point.z=tmp_d;
             point.r = point.g = point.b = 255;
+            point.a = 128;
             cloud->push_back(point);
           }
         ++cnt;
     }
-      //  std::cout << "cnt: "  << cnt << std::endl;
     data_in.close();
     return 0;
 }
@@ -212,6 +186,7 @@ int read2PointCloud(std::string file2read,pcl::PointCloud<PointT>& cloud)
         {
           point.z=tmp_d;
           point.r = point.g = point.b = 255;
+          point.a = 128;
           cloud.push_back(point);
         }
       ++cnt;

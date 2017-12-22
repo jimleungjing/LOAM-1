@@ -25,7 +25,7 @@ inline double calculate_cVal(vector<int>& S,const pcl::PointXYZRGB& centerPoint,
 inline double getCValue(int lo,int hi,PointT &centerPoint, CloudTypePtr cloud);
 inline int setPoint2Red(pcl::PointXYZRGB& Point);
 inline int setPoint2Green(pcl::PointXYZRGB& Point);
-inline int setPointColor(PointT& Point,int r, int g, int b;
+inline int setPointColor(PointT& Point,int r, int g, int b);
 
 int read2PointCloud(std::string& file2read,pcl::PointCloud<PointT>::Ptr cloud);
 int read2PointCloud(std::string file2read,pcl::PointCloud<PointT>& cloud);
@@ -47,7 +47,7 @@ inline int FindCorrespondence(int sweepindex, std::vector<CloudTypePtr>& lastSca
 inline int isEdgePoint(CloudTypePtr scan, int index, float& cValue);
 inline int isPlanarPoint(CloudTypePtr scan,int index,float& cValue);
 double getEdgePoint2CorrespondenceDistance(PointT i,PointT j, PointT l);
-double getPlanarPoint2CorrespondenceDistance(PointT i,PointT j,PointT l,pointT m);
+double getPlanarPoint2CorrespondenceDistance(PointT i,PointT j,PointT l,PointT m);
 double Vector3dModulus(Eigen::Vector3d vec);
 
 
@@ -55,7 +55,7 @@ int extractFeatruePoints(pcl::PointCloud<PointT>::Ptr cloud,std::vector<int>&edg
 {
   int cloudsize = cloud->width * cloud->height;
   int coefK = cloudsize>>7;
-  printf("coefK:%d\n",coefK);
+  //printf("coefK:%d\n",coefK);
 
   std::vector<double> cVal(cloudsize,0);
   //create a “searchPoint” which is assigned random coordinates
@@ -74,7 +74,6 @@ int extractFeatruePoints(pcl::PointCloud<PointT>::Ptr cloud,std::vector<int>&edg
   isEdgeorPlanePoint(cVal,edge_index,plane_index,cThreshold,cloud);
   for(int i=0;i<edge_index.size();++i)
   {
-      std::cout<<edge_index[i]<<endl;
       setPoint2Red(cloud->points[edge_index[i]]);
   }
   for(int i=0;i<plane_index.size();++i)
@@ -242,7 +241,7 @@ inline int isPlanarPoint(CloudTypePtr scan,int index,float& cValue)
     double c;int low, high;
     searchPoint = scan->points[index];
     low  = (index - coefK + scansize)%scansize;
-    high = (index + coefK)%scansize;
+    high = (index + coefK) % scansize;
     c = getCValue(low,high,searchPoint,scan);
     cValue = c;
     //is it a planar point ?
@@ -252,16 +251,17 @@ inline int isPlanarPoint(CloudTypePtr scan,int index,float& cValue)
         return 0;   
 }
 
-double getPlanarPoint2CorrespondenceDistance(PointT i,PointT j,PointT l,pointT m)
+double getPlanarPoint2CorrespondenceDistance(PointT i,PointT j,PointT l,PointT m)
 {
     Eigen::Vector3d Xi(i.x,i.y,i.z),Xj(j.x,j.y,j.z),Xl(l.x,l.y,l.z),Xm(m.x,m.y,m.z);
-    Eigen::Vector3d Xij,Xjl,Xjm,numerator,dinominator;
+    Eigen::Vector3d Xij,Xjl,Xjm,dinominator;
+    double numerator = 0;
     Xij = Xi - Xj;
     Xjl = Xj - Xl;
     Xjm = Xj - Xm;
-    numerator = Xij.dot(Xjl.cross(Xjm));
+    numerator = abs(Xij.dot(Xjl.cross(Xjm)));
     dinominator = Xjl.cross(Xjm);
-    return (Vector3dModulus(numerator)/Vector3dModulus(dinominator));
+    return (numerator/Vector3dModulus(dinominator));
 }
 
 double Vector3dModulus(Eigen::Vector3d vec)
@@ -270,7 +270,8 @@ double Vector3dModulus(Eigen::Vector3d vec)
 }
 
 
-inline int FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& currScans, void* poseTransform, \
+inline int 
+FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& currScans, void* poseTransform, \
                              std::vector<vector<int> >& EdgePointIndices, std::vector<vector<int> >& PlanarPointIndices)
 {
   if(sweepindex == 0)
@@ -293,6 +294,7 @@ inline int FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScan
     KdTreeScanl.setInputCloud(lastScans[pscanl]);
     cout<<"line:"<<line<<endl;
     int cntedge = 0;
+    //compute the distance from edge point i to edge line 
     for(int pI = 0;pI < EdgePointIndices[line].size(); pI++)
     {
         CloudTypePtr scani = currScans[line];
@@ -311,8 +313,35 @@ inline int FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScan
             scanj = lastScans[pscanj];
             scanl = lastScans[pscanl];
             distance = getEdgePoint2CorrespondenceDistance(scani->points[i_index], scanj->points[j_indices[0]],scanl->points[l_indices[0]]);   
-            cout<<"The distance["<<cntedge<<"]:"<<distance<<endl;
+            cout<<"The edge points'["<<cntedge<<"] distance:"<<endl<<distance<<endl;
         }else continue;
+    }
+    int cntplanar = 0;
+    //compute the distance from planar point to planar patches
+    for(int pI = 0;pI < PlanarPointIndices[line].size();pI++)
+    {
+        CloudTypePtr scani = currScans[line];
+        int i_index = PlanarPointIndices[line][pI];
+        std::vector<int> j_indices,l_indices;
+        std::vector<float> j_sqrdistance,l_sqrdistance;
+        KdTreeScanj.nearestKSearch(scani->points[i_index],1,j_indices,j_sqrdistance);
+        KdTreeScanl.nearestKSearch(scani->points[i_index],2,l_indices,l_sqrdistance);
+        float j_cValue,l_cValue,m_cValue;
+        //Verify whether the point j & l is planar points
+        if((isPlanarPoint(lastScans[pscanj],j_indices[0],j_cValue) == 1) && \
+           (isPlanarPoint(lastScans[pscanl],l_indices[0],l_cValue) == 1) && \
+           (isPlanarPoint(lastScans[pscanl],l_indices[1],m_cValue) == 1))
+           {
+               cntplanar ++;
+               double distance = 0;
+               CloudTypePtr scanj,scanl,scanm;
+               scanj = lastScans[pscanj];
+               scanl = lastScans[pscanl];
+               scanm = lastScans[pscanl];
+               distance = getPlanarPoint2CorrespondenceDistance( \
+               scani->points[i_index],scanj->points[j_indices[0]],scanl->points[l_indices[0]],scanm->points[l_indices[1]]);
+               cout<<"The planar points'["<<cntplanar<<"] distance:"<<endl<<distance<<endl;
+           }else continue;
     }
   }
 }
