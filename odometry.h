@@ -7,6 +7,7 @@
 #include <pcl-1.8/pcl/visualization/cloud_viewer.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/point_cloud.h>
+#include <pcl/registration/icp_nl.h>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -43,13 +44,21 @@ inline int isEdgeorPlanePoint(vector<double>&cVal,vector<int>&edge_index, \
 
 //B. Find the feature point correspondence
 inline int FindCorrespondence(int sweepindex, std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& currScans, void* poseTransform, \
-                             std::vector<vector<int> >& EdgePointIndices, std::vector<vector<int> >& PlanarPointIndices);
+                             std::vector<vector<int> >& EdgePointIndices, std::vector<vector<int> >& PlanarPointIndices,\
+                             CloudTypePtr srcCloud, CloudTypePtr tgtCloud);
 inline int isEdgePoint(CloudTypePtr scan, int index, float& cValue);
 inline int isPlanarPoint(CloudTypePtr scan,int index,float& cValue);
 double getEdgePoint2CorrespondenceDistance(PointT i,PointT j, PointT l);
 double getPlanarPoint2CorrespondenceDistance(PointT i,PointT j,PointT l,PointT m);
 double Vector3dModulus(Eigen::Vector3d vec);
 
+void keyboardEvent(const pcl::visualization::KeyboardEvent &event,void *nothing);
+
+struct CorrespondenceInfo{
+    int featurepoint_index;
+    int correspondence_index;
+    double distance;
+};
 
 int extractFeatruePoints(pcl::PointCloud<PointT>::Ptr cloud,std::vector<int>&edge_index,std::vector<int>&plane_index)
 {
@@ -272,7 +281,8 @@ double Vector3dModulus(Eigen::Vector3d vec)
 
 inline int 
 FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& currScans, void* poseTransform, \
-                             std::vector<vector<int> >& EdgePointIndices, std::vector<vector<int> >& PlanarPointIndices)
+                             std::vector<vector<int> >& EdgePointIndices, std::vector<vector<int> >& PlanarPointIndices, \
+                             CloudTypePtr srcCloud, CloudTypePtr tgtCloud)
 {
   if(sweepindex == 0)
     poseTransform = 0;
@@ -307,6 +317,8 @@ FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vec
         float j_cValue,l_cValue;
         if((isEdgePoint(lastScans[pscanj],j_indices[0],j_cValue) == 1) && (isEdgePoint(lastScans[pscanl],l_indices[0],l_cValue) == 1))
         {
+            srcCloud->push_back((currScans[line])->points[i_index]);          setPointColor(srcCloud->back(),128,255,0); 
+            tgtCloud->push_back((lastScans[line])->points[j_indices[0]]);     setPointColor(tgtCloud->back(),255,255,0);
             cntedge ++;
             double distance = 0;
             CloudTypePtr scanj,scanl;
@@ -332,6 +344,8 @@ FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vec
            (isPlanarPoint(lastScans[pscanl],l_indices[0],l_cValue) == 1) && \
            (isPlanarPoint(lastScans[pscanl],l_indices[1],m_cValue) == 1))
            {
+               srcCloud->push_back((currScans[line])->points[i_index]);          setPointColor(srcCloud->back(),128,255,0); 
+               tgtCloud->push_back((lastScans[line])->points[j_indices[0]]);     setPointColor(tgtCloud->back(),255,255,0);
                cntplanar ++;
                double distance = 0;
                CloudTypePtr scanj,scanl,scanm;
