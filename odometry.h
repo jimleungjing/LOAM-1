@@ -20,7 +20,11 @@ typedef pcl::PointCloud<PointT>::Ptr CloudTypePtr;
 using namespace Eigen;
 using namespace std;
 
-const double cThreshold[4] = {0.0, 0.005, 0.012,0.5};     //{planar_lower, planar_upper,edge_lower,edge_upper}
+const double cThreshold[4] = {0.0, 3e-3, 0.012,0.5};     //{planar_lower, planar_upper,edge_lower,edge_upper}
+#define dEpsilon 1e-4
+std::string dir = "../../data/Pk_select/";
+std::string filesuffix[16] = {"_1.XYZ","_3.XYZ","_5.XYZ","_7.XYZ","_9.XYZ","_11.XYZ","_13.XYZ","_15.XYZ", \
+                              "_-1.XYZ","_-3.XYZ","_-5.XYZ","_-7.XYZ","_-9.XYZ","_-11.XYZ","_-13.XYZ","_-15.XYZ"};
 
 inline double calculate_cVal(vector<int>& S,const pcl::PointXYZRGB& centerPoint,pcl::PointCloud<PointT>::Ptr cloud);
 inline double getCValue(int lo,int hi,PointT &centerPoint, CloudTypePtr cloud);
@@ -43,7 +47,7 @@ inline int isEdgeorPlanePoint(vector<double>&cVal,vector<int>&edge_index, \
                               vector<int>&plane_index,const double threshold[4],pcl::PointCloud<PointT>::Ptr cloud);
 
 //B. Find the feature point correspondence
-inline int FindCorrespondence(int sweepindex, std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& currScans, void* poseTransform, \
+inline int FindCorrespondence(int sweepindex, std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& currScans, \
                              std::vector<vector<int> >& EdgePointIndices, std::vector<vector<int> >& PlanarPointIndices,\
                              CloudTypePtr srcCloud, CloudTypePtr tgtCloud);
 inline int isEdgePoint(CloudTypePtr scan, int index, float& cValue);
@@ -51,6 +55,13 @@ inline int isPlanarPoint(CloudTypePtr scan,int index,float& cValue);
 double getEdgePoint2CorrespondenceDistance(PointT i,PointT j, PointT l);
 double getPlanarPoint2CorrespondenceDistance(PointT i,PointT j,PointT l,PointT m);
 double Vector3dModulus(Eigen::Vector3d vec);
+
+PointT getEdgePoint2LineFootpoint(PointT& i, PointT& j, PointT& l);
+PointT getPlanarPoint2PlaneFootpoint(PointT& i, PointT& j, PointT& l, PointT& m);
+
+//D. Odometry
+void Odometry(std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& currentScans, Eigen::Matrix4d& poseTransform, \
+              std::vector<CloudTypePtr>& reprojectedScans);
 
 void keyboardEvent(const pcl::visualization::KeyboardEvent &event,void *nothing);
 
@@ -199,8 +210,8 @@ inline int isEdgeorPlanePoint(vector<double>&cVal,vector<int>&edge_index,\
 
         }
     #endif
-        std::cout<<"plane_index size: "<<plane_index.size()<<endl;
-        std::cout<<"edge_index size: "<<edge_index.size()<<endl;
+        // std::cout<<"plane_index size: "<<plane_index.size()<<endl;
+        // std::cout<<"edge_index size: "<<edge_index.size()<<endl;
         return 0;
 
 }
@@ -211,6 +222,9 @@ inline int isEdgePoint(CloudTypePtr scan, int index, float& cValue)
   int scansize = scan->width * scan->height;
   int coefK = scansize>>7;
   PointT searchPoint;
+
+  if(index > scansize)
+    return 0;
   //To get c value
   double c;int low, high;
   searchPoint = scan->points[index];
@@ -241,11 +255,27 @@ double getEdgePoint2CorrespondenceDistance(PointT i,PointT j, PointT l)
   return distance;
 }
 
+PointT getEdgePoint2LineFootpoint(PointT& i, PointT& j, PointT& l)
+{
+    PointT footpoint;
+    double m,n,p,t;
+    m = j.x - l.x;
+    n = j.y - l.y;
+    p = j.z - l.z;
+    t = (m*(i.x - j.x) + n*(i.y - j.y) + p*(i.z - j.z))/(m*m + n*n + p*p);
+    footpoint.x = m*t + j.x;
+    footpoint.y = n*t + j.y;
+    footpoint.z = p*t + j.z;
+    return footpoint;
+}
+
 inline int isPlanarPoint(CloudTypePtr scan,int index,float& cValue)
 {
     int scansize = scan->width * scan->height;
     int coefK = scansize>>7;
     PointT searchPoint;
+    if(index > scansize)
+        return 0;
     //To get c value
     double c;int low, high;
     searchPoint = scan->points[index];
@@ -273,6 +303,34 @@ double getPlanarPoint2CorrespondenceDistance(PointT i,PointT j,PointT l,PointT m
     return (numerator/Vector3dModulus(dinominator));
 }
 
+PointT getPlanarPoint2PlaneFootpoint(PointT& i, PointT& j, PointT& l, PointT& m)
+{
+    //establish the plane equation
+    //the plane is composed of three non-coplanar point j, l, m
+    double A, B, C, D = 1;
+    Eigen::Matrix3d coefMatrix, leftMat; 
+    Eigen::Vector3d coefPlane, rightMat, footpointVector;
+    PointT footpoint;
+
+    coefMatrix << j.x, j.y, j.z, 
+                  l.x, l.y, l.z, 
+                  m.x, m.y, m.z;
+    coefPlane = -(coefMatrix.inverse())*(Eigen::VectorXd::Ones(3));
+    leftMat << (l.x - j.x), (l.y - j.y), (l.z - j.z),                          //x2 - x1, y2 - y1, z2 - z1
+               (m.x - j.x), (m.y - j.y), (m.z - j.z),                          //x3 - x1, y3 - y1, z3 - z1
+               (coefPlane(0)), (coefPlane(1)), (coefPlane(2));                 //   A   ,    B   ,    C
+
+    rightMat << (i.x*(l.x - j.x) + i.y*(l.y - j.y) + i.z*(l.z - j.z)),         //x4(x2 - x1)+y4(y2 - y1)+z4(z2 - z1)
+                (i.x*(m.x - j.x) + i.y*(m.y - j.y) + i.z*(m.z - j.z)),         //x4(x3 - x1)+y4(y3 - y1)+z4(z3 - z1)
+                -1;                                                            //-1
+    footpointVector = leftMat.inverse() * rightMat;
+    
+    footpoint.x = footpointVector(0);
+    footpoint.y = footpointVector(1);
+    footpoint.z = footpointVector(2);
+    return footpoint; 
+}
+
 double Vector3dModulus(Eigen::Vector3d vec)
 {
     return sqrt(vec(0)*vec(0) + vec(1)*vec(1) + vec(2)*vec(2));
@@ -280,12 +338,12 @@ double Vector3dModulus(Eigen::Vector3d vec)
 
 
 inline int 
-FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& currScans, void* poseTransform, \
+FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& currScans, \
                              std::vector<vector<int> >& EdgePointIndices, std::vector<vector<int> >& PlanarPointIndices, \
                              CloudTypePtr srcCloud, CloudTypePtr tgtCloud)
 {
-  if(sweepindex == 0)
-    poseTransform = 0;
+//   if(sweepindex == 0)
+//     poseTransform = 0;
   pcl::KdTreeFLANN<PointT> KdTreeScanj,KdTreeScanl;
   int pscanj, pscanl;
   for(int line = 0;line < 16;line++)
@@ -302,30 +360,37 @@ FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vec
     }
     KdTreeScanj.setInputCloud(lastScans[pscanj]);
     KdTreeScanl.setInputCloud(lastScans[pscanl]);
-    cout<<"line:"<<line<<endl;
+    //cout<<"line:"<<line<<endl;
     int cntedge = 0;
     //compute the distance from edge point i to edge line 
     for(int pI = 0;pI < EdgePointIndices[line].size(); pI++)
     {
         CloudTypePtr scani = currScans[line];
-        int i_index = EdgePointIndices[line][pI];
+        int i_index = EdgePointIndices[line][pI];       //cout<<"Edge_i_index:"<<i_index<<endl;
         std::vector<int> j_indices,l_indices;
         std::vector<float> j_sqrdistance,l_sqrdistance;
         KdTreeScanj.nearestKSearch(scani->points[i_index],1,j_indices,j_sqrdistance);
         KdTreeScanl.nearestKSearch(scani->points[i_index],1,l_indices,l_sqrdistance);
         //Verify whether the point j & l is edge points
-        float j_cValue,l_cValue;
+        float j_cValue,l_cValue;                        //cout<<"Edge_j_index:"<<j_indices[0]<<endl<<"Edge_l_index:"<<l_indices[0]<<endl;
         if((isEdgePoint(lastScans[pscanj],j_indices[0],j_cValue) == 1) && (isEdgePoint(lastScans[pscanl],l_indices[0],l_cValue) == 1))
         {
-            srcCloud->push_back((currScans[line])->points[i_index]);          setPointColor(srcCloud->back(),128,255,0); 
-            tgtCloud->push_back((lastScans[line])->points[j_indices[0]]);     setPointColor(tgtCloud->back(),255,255,0);
+            PointT footpoint;
             cntedge ++;
-            double distance = 0;
             CloudTypePtr scanj,scanl;
             scanj = lastScans[pscanj];
             scanl = lastScans[pscanl];
+            srcCloud->push_back((currScans[line])->points[i_index]);    
+            footpoint = getEdgePoint2LineFootpoint(scani->points[i_index], \
+                                scanj->points[j_indices[0]], scanl->points[l_indices[0]]);      
+            tgtCloud->push_back(footpoint);     
+            setPointColor(srcCloud->back(),128,255,0); 
+            setPointColor(tgtCloud->back(),255,255,0);
+            // cout<<"Edge_footpoint:\t"<<footpoint<<endl;
+            double distance = 0;
             distance = getEdgePoint2CorrespondenceDistance(scani->points[i_index], scanj->points[j_indices[0]],scanl->points[l_indices[0]]);   
-            cout<<"The edge points'["<<cntedge<<"] distance:"<<endl<<distance<<endl;
+            if(distance < dEpsilon)
+                cout<<"The edge points'["<<cntedge<<"] distance:"<<endl<<distance<<endl;
         }else continue;
     }
     int cntplanar = 0;
@@ -333,31 +398,163 @@ FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vec
     for(int pI = 0;pI < PlanarPointIndices[line].size();pI++)
     {
         CloudTypePtr scani = currScans[line];
-        int i_index = PlanarPointIndices[line][pI];
+        int i_index = PlanarPointIndices[line][pI];     //cout<<"Planar_i_index:"<<i_index<<endl;
         std::vector<int> j_indices,l_indices;
         std::vector<float> j_sqrdistance,l_sqrdistance;
         KdTreeScanj.nearestKSearch(scani->points[i_index],1,j_indices,j_sqrdistance);
         KdTreeScanl.nearestKSearch(scani->points[i_index],2,l_indices,l_sqrdistance);
-        float j_cValue,l_cValue,m_cValue;
+        float j_cValue,l_cValue,m_cValue;              // cout<<"Planar_j_index:"<<j_indices[0]<<endl<<"Planar_l_index:"<<l_indices[0]<<endl;
         //Verify whether the point j & l is planar points
         if((isPlanarPoint(lastScans[pscanj],j_indices[0],j_cValue) == 1) && \
            (isPlanarPoint(lastScans[pscanl],l_indices[0],l_cValue) == 1) && \
            (isPlanarPoint(lastScans[pscanl],l_indices[1],m_cValue) == 1))
            {
-               srcCloud->push_back((currScans[line])->points[i_index]);          setPointColor(srcCloud->back(),128,255,0); 
-               tgtCloud->push_back((lastScans[line])->points[j_indices[0]]);     setPointColor(tgtCloud->back(),255,255,0);
+               PointT footpoint;
                cntplanar ++;
-               double distance = 0;
                CloudTypePtr scanj,scanl,scanm;
                scanj = lastScans[pscanj];
                scanl = lastScans[pscanl];
                scanm = lastScans[pscanl];
-               distance = getPlanarPoint2CorrespondenceDistance( \
-               scani->points[i_index],scanj->points[j_indices[0]],scanl->points[l_indices[0]],scanm->points[l_indices[1]]);
-               cout<<"The planar points'["<<cntplanar<<"] distance:"<<endl<<distance<<endl;
+               srcCloud->push_back((currScans[line])->points[i_index]); 
+               footpoint =  getPlanarPoint2PlaneFootpoint( \
+               scani->points[i_index],scanj->points[j_indices[0]],scanl->points[l_indices[0]],scanm->points[l_indices[1]]);        
+               tgtCloud->push_back(footpoint);
+               setPointColor(srcCloud->back(),128,255,0); 
+               setPointColor(tgtCloud->back(),255,255,0); 
+            //    cout<<"Planar_footpoint:\t"<<footpoint<<endl;
+                double distance = 0;              
+                distance = getPlanarPoint2CorrespondenceDistance( \
+                scani->points[i_index],scanj->points[j_indices[0]],scanl->points[l_indices[0]],scanm->points[l_indices[1]]);
+                if(distance < dEpsilon)
+                    cout<<"The planar points'["<<cntplanar<<"] distance:"<<endl<<distance<<endl;
            }else continue;
     }
   }
 }
 
+void Odometry(std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& currentScans, Eigen::Matrix4d& poseTransform, \
+              std::vector<CloudTypePtr>& reprojectedScans)
+{
+    CloudTypePtr srcCloud(new pcl::PointCloud<PointT>), tgtCloud(new pcl::PointCloud<PointT>), alignCloud(new pcl::PointCloud<PointT>);
+    
+    //copy the currentScans
+    std::vector<CloudTypePtr> iterScans;
+    for(int line = 0;line < 16; line++)
+    {
+        CloudTypePtr pscan(new pcl::PointCloud<PointT>);
+        *pscan = *(currentScans[line]);
+        iterScans.push_back(pscan);
+    }
+  
+    pcl::IterativeClosestPointNonLinear<PointT,PointT> icp;    
+    icp.setMaxCorrespondenceDistance(100);
+    icp.setMaximumIterations(1);
+    icp.setTransformationEpsilon(1e-6);
+    icp.setEuclideanFitnessEpsilon(0.01);
+
+    Eigen::Matrix4d nextTransform;
+    int icpMaximumIterations = 10;
+
+    //extract feature points from Pk+1
+    std::vector<vector<int> > EdgePointIndices(16);
+    std::vector<vector<int> > PlanarPointIndices(16);
+    for(int line = 0;line < 16;line++)
+    {
+        extractFeatruePoints(iterScans[line],EdgePointIndices[line],PlanarPointIndices[line]);
+    }
+
+    for(int iter = 0; iter < icpMaximumIterations; iter++)
+    {
+        //reproject the Ek+1 & Hk+1 to time tk+1
+        if(iter != 0)
+        {
+            Eigen::Vector4d tmpPoint;
+            PointT currpoint;
+            for(int line = 0 ;line < 16;line++)
+            {
+                for(int edge_iter = 0; edge_iter < EdgePointIndices[line].size();edge_iter++)
+                {
+                    currpoint = iterScans[line]->points[EdgePointIndices[line][edge_iter]];
+                    tmpPoint<<currpoint.x, currpoint.y, currpoint.z, 1;
+                    tmpPoint = nextTransform.inverse() * tmpPoint;
+                    currpoint.x = tmpPoint(0);  currpoint.y = tmpPoint(1);  currpoint.z = tmpPoint(2);
+                    iterScans[line]->points[EdgePointIndices[line][edge_iter]] = currpoint;
+                }
+                for(int planar_iter = 0; planar_iter < PlanarPointIndices[line].size();planar_iter++)
+                {
+                    currpoint = iterScans[line]->points[PlanarPointIndices[line][planar_iter]];
+                    tmpPoint<<currpoint.x, currpoint.y, currpoint.z, 1;
+                    tmpPoint = nextTransform.inverse() * tmpPoint;
+                    currpoint.x = tmpPoint(0);  currpoint.y = tmpPoint(1);  currpoint.z = tmpPoint(2);
+                    iterScans[line]->points[PlanarPointIndices[line][planar_iter]] = currpoint;                
+                }
+            }
+        }
+        else  // linearly interpolate once
+        {
+            PointT currpoint;   double interpolation = 0;
+            poseTransform = Eigen::Matrix4d::Identity(4,4);
+            for(int line = 0 ;line < 16;line++)
+            {
+                for(int edge_iter = 0; edge_iter < EdgePointIndices[line].size();edge_iter++)
+                {
+                    interpolation = (EdgePointIndices[line][edge_iter]+1)*1.0f/iterScans[line]->size();
+                    currpoint = iterScans[line]->points[EdgePointIndices[line][edge_iter]];
+                    currpoint.x /= interpolation;  currpoint.y /= interpolation;  currpoint.z /= interpolation;
+                    iterScans[line]->points[EdgePointIndices[line][edge_iter]] = currpoint;
+                }
+                for(int planar_iter = 0; planar_iter < PlanarPointIndices[line].size();planar_iter++)
+                {
+                    interpolation = (PlanarPointIndices[line][planar_iter]+1)*1.0f/iterScans[line]->size();
+                    currpoint = iterScans[line]->points[PlanarPointIndices[line][planar_iter]];
+                    currpoint.x /= interpolation;  currpoint.y /= interpolation;  currpoint.z /= interpolation;
+                    iterScans[line]->points[PlanarPointIndices[line][planar_iter]] = currpoint;                
+                }
+            }           
+        }
+        //find feature point correspondence
+        FindCorrespondence(0,lastScans,iterScans,EdgePointIndices,PlanarPointIndices,srcCloud,tgtCloud);
+        icp.setInputSource(srcCloud);   //srcCloud
+        icp.setInputTarget(tgtCloud);   //tgtCloud
+        icp.align(*alignCloud);
+
+        //Update Tk+1 for a nonlinear iteration
+        nextTransform = (icp.getFinalTransformation()).cast<double>();
+        //accumulate the pose transform
+        poseTransform = poseTransform * nextTransform;          
+        cout<<"matrix"<<iter<<":\n"<<icp.getFinalTransformation()<<endl;
+        // if(icp.hasConverged())
+        // {
+        //     cout <<"has conveged:\n"<<"score:"<<icp.getFitnessScore()<<endl;
+        //     break;
+        // }
+    }
+
+    reprojectedScans.reserve(16);
+    // reproject the currentScans to tk+2
+    for(int line = 0;line < 16;line++)
+    {
+        Eigen::Vector4d tmpPoint;
+        PointT currpoint;
+        CloudTypePtr scan(new pcl::PointCloud<PointT>);
+        reprojectedScans.push_back(scan);
+        for(int iter = 0; iter < (currentScans[line])->size();iter++)
+        {
+            currpoint = currentScans[line]->points[iter];
+            tmpPoint<<currpoint.x, currpoint.y, currpoint.z, 1;
+            //tmpPoint = (currentScans[line]->size() * 1.0f / (iter+1)) * nextTransform.inverse() * tmpPoint;
+            tmpPoint = nextTransform.inverse() * tmpPoint;
+            currpoint.x = tmpPoint(0);  currpoint.y = tmpPoint(1);  currpoint.z = tmpPoint(2);
+            //currentScans[line]->points[iter] = currpoint;            
+            (reprojectedScans[line])->push_back(currpoint);
+        }
+    }
+    //poseTransform = nextTransform;   
+    cout<<"pose Transform:\n"<<poseTransform<<endl;
+}
+
+class LidarOdometry{
+    public:
+    private:
+};
 #endif
