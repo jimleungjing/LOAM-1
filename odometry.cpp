@@ -23,7 +23,7 @@ int main()
     int line = 0;std::string filename;
     char ctmp[8];
     Eigen::Matrix4d poseTransform;
-    for(int pK = 1; pK < 15; pK++)
+    for(int pK = 1; pK < 5; pK++)
     {
 
         if(pK == 1)
@@ -45,6 +45,7 @@ int main()
             continue;
         }
         //read current point cloud : Pk+1
+        currScans.clear();
         currScans.reserve(16);
         for(line = 0;line < 16;line++)
         {
@@ -60,30 +61,44 @@ int main()
             currScans.push_back(scanCloud0);
             *sweepCloud1 += *(currScans.back());
         }
-
+        
+        reprojectedScans.clear();
         Odometry(lastScans,currScans,poseTransform,reprojectedScans);
+        lastScans.clear();
         lastScans = reprojectedScans;
         // Mapping
-        for(line = 0; line < 16;line++)
-            *sweepCloud2 += *(lastScans[line]);
+        // for(line = 0; line < 16;line++)
+        //     *sweepCloud1 += *(lastScans[line]);         //sweepCloud2 +=
  
     }
-        // PkViewer.removePointCloud();
-        // PkViewer.addPointCloud(sweepCloud2,filename);
-        // while((!PkViewer.wasStopped())) 
-        // {
-        //     PkViewer.spinOnce(100);
-        // }
+        for(line = 0; line < 16;line++)
+            *sweepCloud2 += *(lastScans[line]);         //sweepCloud2 +=
+        PkViewer.removePointCloud();
+        PkViewer.addPointCloud(sweepCloud2,filename);
+  
         originalViewer.removePointCloud();
         originalViewer.addPointCloud(sweepCloud1,filename);
-        while((!originalViewer.wasStopped())) 
+        while((!originalViewer.wasStopped()) || PkViewer.wasStopped()) 
         {
             originalViewer.spinOnce(100);
+            PkViewer.spinOnce(100);           
         }
 
 
 
+//some code for illustation
+    // std::vector<vector<int> > EdgePointIndices(16);
+    // std::vector<vector<int> > PlanarPointIndices(16);
+    // CloudTypePtr srcCloud(new pcl::PointCloud<PointT>), tgtCloud(new pcl::PointCloud<PointT>);
+    // for(int line = 0;line < 16;line++)
+    // {
+    //     //extractFeatruePoints(lastScans[line],EdgePointIndices[line],PlanarPointIndices[line]);
+    //     extractFeatruePoints(currScans[line],EdgePointIndices[line],PlanarPointIndices[line]);
+    // }
+    // FindCorrespondence(0,lastScans,currScans,EdgePointIndices,PlanarPointIndices,srcCloud,tgtCloud);
+//
 
+//old code
 // boost::shared_ptr<pcl::visualization::PCLVisualizer> view(new pcl::visualization::PCLVisualizer("icp test"));  //定义窗口共享指针
 // int v1 ; //定义两个窗口v1，v2，窗口v1用来显示初始位置，v2用以显示配准过程
 // int v2 ;

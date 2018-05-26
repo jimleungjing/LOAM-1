@@ -21,7 +21,7 @@ using namespace Eigen;
 using namespace std;
 
 const double cThreshold[4] = {0.0, 3e-3, 0.012,0.5};     //{planar_lower, planar_upper,edge_lower,edge_upper}
-#define dEpsilon 1e-4
+#define dEpsilon 1e-3
 std::string dir = "../../data/Pk_select/";
 std::string filesuffix[16] = {"_1.XYZ","_3.XYZ","_5.XYZ","_7.XYZ","_9.XYZ","_11.XYZ","_13.XYZ","_15.XYZ", \
                               "_-1.XYZ","_-3.XYZ","_-5.XYZ","_-7.XYZ","_-9.XYZ","_-11.XYZ","_-13.XYZ","_-15.XYZ"};
@@ -386,7 +386,7 @@ FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vec
             tgtCloud->push_back(footpoint);     
             setPointColor(srcCloud->back(),128,255,0); 
             setPointColor(tgtCloud->back(),255,255,0);
-            // cout<<"Edge_footpoint:\t"<<footpoint<<endl;
+            //cout<<"The edge points'["<<cntedge<<"] footpoint:\n"<<footpoint<<endl;
             double distance = 0;
             distance = getEdgePoint2CorrespondenceDistance(scani->points[i_index], scanj->points[j_indices[0]],scanl->points[l_indices[0]]);   
             if(distance < dEpsilon)
@@ -421,7 +421,7 @@ FindCorrespondence(int sweepindex,std::vector<CloudTypePtr>& lastScans, std::vec
                tgtCloud->push_back(footpoint);
                setPointColor(srcCloud->back(),128,255,0); 
                setPointColor(tgtCloud->back(),255,255,0); 
-            //    cout<<"Planar_footpoint:\t"<<footpoint<<endl;
+               // cout<<"The planar points'["<<cntplanar<<"] footpoint:"<<endl<<footpoint<<endl;
                 double distance = 0;              
                 distance = getPlanarPoint2CorrespondenceDistance( \
                 scani->points[i_index],scanj->points[j_indices[0]],scanl->points[l_indices[0]],scanm->points[l_indices[1]]);
@@ -448,12 +448,12 @@ void Odometry(std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& c
   
     pcl::IterativeClosestPointNonLinear<PointT,PointT> icp;    
     icp.setMaxCorrespondenceDistance(100);
-    icp.setMaximumIterations(1);
+    icp.setMaximumIterations(5);
     icp.setTransformationEpsilon(1e-6);
     icp.setEuclideanFitnessEpsilon(0.01);
 
     Eigen::Matrix4d nextTransform;
-    int icpMaximumIterations = 10;
+    int icpMaximumIterations = 5;
 
     //extract feature points from Pk+1
     std::vector<vector<int> > EdgePointIndices(16);
@@ -537,7 +537,6 @@ void Odometry(std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& c
         Eigen::Vector4d tmpPoint;
         PointT currpoint;
         CloudTypePtr scan(new pcl::PointCloud<PointT>);
-        reprojectedScans.push_back(scan);
         for(int iter = 0; iter < (currentScans[line])->size();iter++)
         {
             currpoint = currentScans[line]->points[iter];
@@ -546,8 +545,10 @@ void Odometry(std::vector<CloudTypePtr>& lastScans, std::vector<CloudTypePtr>& c
             tmpPoint = nextTransform.inverse() * tmpPoint;
             currpoint.x = tmpPoint(0);  currpoint.y = tmpPoint(1);  currpoint.z = tmpPoint(2);
             //currentScans[line]->points[iter] = currpoint;            
-            (reprojectedScans[line])->push_back(currpoint);
+           // (reprojectedScans[line])->push_back(currpoint);
+           scan->push_back(currpoint);
         }
+        reprojectedScans.push_back(scan);
     }
     //poseTransform = nextTransform;   
     cout<<"pose Transform:\n"<<poseTransform<<endl;
